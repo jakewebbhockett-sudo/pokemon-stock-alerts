@@ -1,5 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
 
 SMYTHS_URL = (
@@ -8,6 +9,8 @@ SMYTHS_URL = (
     "pokemon-toys/pokemon-trading-card-game-tcg/"
     "c/SM0601011202"
 )
+
+BASE_URL = "https://www.smythstoys.com"
 
 
 def get_smyths_products():
@@ -23,10 +26,17 @@ def get_smyths_products():
                     "Mozilla/5.0 "
                     "(Windows NT 10.0; Win64; x64) "
                     "AppleWebKit/537.36 "
-                    "Chrome/120.0 Safari/537.36"
-                )
+                    "(KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+                "Accept-Language": "en-GB,en;q=0.9"
             },
             timeout=20
+        )
+
+        print(
+            f"Smyths response: "
+            f"{response.status_code}"
         )
 
         response.raise_for_status()
@@ -36,45 +46,58 @@ def get_smyths_products():
             "html.parser"
         )
 
-        print(
-            "Smyths response:",
-            response.status_code
-        )
-
-        # Find possible product links
+        # Find ALL links first
         links = soup.find_all(
             "a",
             href=True
         )
 
-        seen = set()
+        seen_urls = set()
 
         for link in links:
 
-            text = link.get_text(
+            href = link.get("href", "")
+
+            # Look for Smyths product pages
+            if "/p/" not in href:
+                continue
+
+            product_url = urljoin(
+                BASE_URL,
+                href
+            )
+
+            if product_url in seen_urls:
+                continue
+
+            seen_urls.add(product_url)
+
+            # Get product name
+            name = link.get_text(
                 " ",
                 strip=True
             )
 
-            href = link["href"]
+            # Sometimes product name is inside
+            # an aria-label instead
+            if not name:
+                name = link.get(
+                    "aria-label",
+                    ""
+                )
 
-            if not text:
+            if not name:
                 continue
 
-            # Only Pokémon / product-looking links
-            if text in seen:
+            # Only Pokémon products
+            if "pokemon" not in name.lower():
                 continue
-
-            if "pokemon" not in text.lower():
-                continue
-
-            seen.add(text)
 
             products.append({
-                "name": text,
+                "name": name,
                 "store": "Smyths Toys UK",
                 "price": None,
-                "url": href,
+                "url": product_url,
                 "status": "FOUND"
             })
 
@@ -82,6 +105,13 @@ def get_smyths_products():
             f"Smyths: "
             f"{len(products)} products found"
         )
+
+        # Debug information
+        if len(products) == 0:
+            print(
+                "Smyths page loaded but "
+                "no product links found"
+            )
 
         return products
 
