@@ -32,25 +32,6 @@ RETAILER_SOURCES = [
 ]
 
 
-KEYWORDS = [
-    "pokemon",
-    "pokémon",
-    "restock",
-    "restocked",
-    "back in stock",
-    "coming soon",
-    "pre-order",
-    "preorder",
-    "product drop",
-    "new release",
-    "release",
-    "booster",
-    "elite trainer",
-    "etb",
-    "tcg"
-]
-
-
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 "
@@ -61,44 +42,117 @@ HEADERS = {
 }
 
 
-def is_relevant(text):
+# Generic links we NEVER want alerts for
+GENERIC_TITLES = [
+    "pokemon",
+    "pokémon",
+    "booster boxes",
+    "booster box",
+    "booster packs",
+    "booster pack",
+    "elite trainer boxes",
+    "elite trainer box",
+    "etb",
+    "prerelease packs",
+    "prerelease pack",
+    "pokemon tcg sets",
+    "boosters",
+    "sleeved boosters",
+    "booster bundles",
+    "booster bundle",
+    "japanese tcg",
+    "simplified chinese tcg",
+    "traditional chinese tcg",
+    "korean tcg",
+    "preorder",
+    "pre-order",
+    "preorders",
+    "pre-orders",
+    "restocks",
+    "shop all restocks",
+    "new releases",
+    "new release"
+]
 
-    if not text:
+
+def is_generic(title):
+    """Reject generic category links."""
+
+    if not title:
+        return True
+
+    title = title.lower().strip()
+
+    return title in GENERIC_TITLES
+
+
+def is_relevant(title, url=""):
+    """
+    Check whether this looks like a real
+    Pokémon product or announcement.
+    """
+
+    if not title:
         return False
 
-    text = text.lower()
+    title_lower = title.lower()
+
+    # Reject generic category pages
+    if is_generic(title):
+        return False
+
+    # Must contain Pokémon in title or URL
+    combined = (
+        title_lower + " " + url.lower()
+    )
 
     pokemon_words = [
         "pokemon",
         "pokémon"
     ]
 
-    stock_words = [
-        "restock",
-        "restocked",
-        "back in stock",
-        "coming soon",
-        "pre-order",
-        "preorder",
-        "product drop",
-        "release",
+    if not any(
+        word in combined
+        for word in pokemon_words
+    ):
+        return False
+
+    # Must contain useful product/news wording
+    useful_words = [
+        "30th",
+        "celebration",
+        "mega",
+        "delta",
+        "reign",
+        "destined",
+        "rivals",
+        "ascended",
+        "heroes",
+        "surging",
+        "sparks",
+        "prismatic",
+        "evolutions",
         "booster",
         "elite trainer",
-        "etb",
-        "tcg"
+        "collection",
+        "premium",
+        "box",
+        "bundle",
+        "tin",
+        "officially revealed",
+        "coming",
+        "restock",
+        "back in stock",
+        "pre-order",
+        "preorder",
+        "release",
+        "launch"
     ]
 
-    has_pokemon = any(
-        word in text
-        for word in pokemon_words
+    return any(
+        word in combined
+        for word in useful_words
     )
-
-    has_stock_word = any(
-        word in text
-        for word in stock_words
-    )
-
-    return has_pokemon and has_stock_word
 
 
 def get_pokemon_announcements():
@@ -159,23 +213,9 @@ def get_pokemon_announcements():
 
             seen_urls.add(url)
 
-            title_lower = title.lower()
-
-            relevant_words = [
-                "tcg",
-                "trading card",
-                "product",
-                "release",
-                "expansion",
-                "booster",
-                "elite trainer",
-                "collection",
-                "pokemon center"
-            ]
-
-            if not any(
-                word in title_lower
-                for word in relevant_words
+            if not is_relevant(
+                title,
+                url
             ):
                 continue
 
@@ -254,15 +294,6 @@ def get_retailer_announcements():
                 if not title:
                     continue
 
-                combined_text = (
-                    title + " " + href
-                )
-
-                if not is_relevant(
-                    combined_text
-                ):
-                    continue
-
                 url = urljoin(
                     page_url,
                     href
@@ -272,6 +303,12 @@ def get_retailer_announcements():
                     continue
 
                 seen_urls.add(url)
+
+                if not is_relevant(
+                    title,
+                    url
+                ):
+                    continue
 
                 announcements.append({
                     "title": title,
@@ -284,7 +321,7 @@ def get_retailer_announcements():
 
             print(
                 f"{store}: "
-                f"{len(seen_urls)} relevant links"
+                f"{len(announcements)} total alerts so far"
             )
 
         except Exception as error:
