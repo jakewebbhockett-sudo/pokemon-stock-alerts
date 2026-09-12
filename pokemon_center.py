@@ -26,7 +26,12 @@ def get_pokemon_center_products():
             timeout=20
         )
 
-        response.raise_for_status()
+        print(f"Pokémon Center response: {response.status_code}")
+print(f"Response URL: {response.url}")
+
+if response.status_code != 200:
+    print(f"Response preview: {response.text[:500]}")
+    return []
 
         soup = BeautifulSoup(
             response.text,
