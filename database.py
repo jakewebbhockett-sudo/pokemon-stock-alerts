@@ -14,43 +14,94 @@ def load_products():
     try:
         with open(DATABASE_FILE, "r") as file:
             return json.load(file)
+
     except Exception:
         return {}
 
 
 def save_products(products):
-    """Save discovered products."""
+    """Save products and their latest status."""
 
     with open(DATABASE_FILE, "w") as file:
-        json.dump(products, file, indent=2)
+        json.dump(
+            products,
+            file,
+            indent=2
+        )
 
 
 def product_key(store, product_name):
     """Create a unique ID for a product."""
 
-    clean_store = store.lower().replace(" ", "_")
-    clean_name = product_name.lower().replace(" ", "_")
+    clean_store = (
+        store.lower()
+        .replace(" ", "_")
+    )
+
+    clean_name = (
+        product_name.lower()
+        .replace(" ", "_")
+    )
 
     return f"{clean_store}_{clean_name}"
 
 
-def is_new_product(products, store, product_name):
+def is_new_product(
+    products,
+    store,
+    product_name
+):
     """Check whether we've seen this product before."""
 
-    key = product_key(store, product_name)
+    key = product_key(
+        store,
+        product_name
+    )
+
     return key not in products
 
 
-def add_product(products, store, product_name, price, url):
-    """Add or update a product."""
+def get_product_status(
+    products,
+    store,
+    product_name
+):
+    """Get the previously saved stock status."""
 
-    key = product_key(store, product_name)
+    key = product_key(
+        store,
+        product_name
+    )
+
+    if key not in products:
+        return None
+
+    return products[key].get(
+        "status"
+    )
+
+
+def add_product(
+    products,
+    store,
+    product_name,
+    price,
+    url,
+    status
+):
+    """Add or update a product and its status."""
+
+    key = product_key(
+        store,
+        product_name
+    )
 
     products[key] = {
         "name": product_name,
         "store": store,
         "price": price,
-        "url": url
+        "url": url,
+        "status": status
     }
 
     return products
