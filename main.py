@@ -5,10 +5,11 @@ from announcements import get_announcements
 from database import (
     load_products,
     save_products,
-    is_new_product,
+    get_product_status,
     add_product
 )
 
+from stock_monitor import should_alert
 from scorer import score_product
 from alerts import send_telegram_alert
 
@@ -17,7 +18,7 @@ def run_bot():
 
     print("🤖 Pokémon Stock Alert Bot starting...")
 
-    # Load previously seen products
+    # Load previously saved products
     products_database = load_products()
 
     # =========================
@@ -50,10 +51,18 @@ def run_bot():
         url = product["url"]
         status = product["status"]
 
-        if is_new_product(
+        # Get previous stock status
+        old_status = get_product_status(
             products_database,
             store,
             name
+        )
+
+        # Only alert when stock changes
+        # from NOT AVAILABLE to AVAILABLE
+        if should_alert(
+            old_status,
+            status
         ):
 
             score, reasons = score_product(
@@ -68,27 +77,29 @@ def run_bot():
             )
 
             print(
-                f"🚨 NEW PRODUCT: "
-                f"{name}"
+                f"🚨 RESTOCK ALERT: "
+                f"{name} | {store}"
             )
 
             send_telegram_alert(
                 product_name=name,
                 store=store,
                 price=price if price else "Unknown",
-                status=status,
+                status="🟢 IN STOCK NOW",
                 score=score,
                 reasons=reasons_text,
                 product_url=url
             )
 
-            add_product(
-                products_database,
-                store,
-                name,
-                price,
-                url
-            )
+        # Always save latest status
+        add_product(
+            products_database,
+            store,
+            name,
+            price,
+            url,
+            status
+        )
 
     # =========================
     # CHECK ANNOUNCEMENTS
@@ -114,25 +125,26 @@ def run_bot():
             f"{title}"
         )
 
-        # Use existing Telegram alert system
         send_telegram_alert(
             product_name=title,
             store=store,
             price="N/A",
             status=(
-                f"{announcement_type} | "
+                f"📢 {announcement_type} | "
                 f"{confidence} CONFIDENCE"
             ),
-            score="NEW",
+            score="NEWS",
             reasons=(
-                "Official Pokémon news or "
-                "announcement detected"
+                f"Source: "
+                f"{announcement['source']}"
             ),
             product_url=url
         )
 
-    # Save database
-    save_products(products_database)
+    # Save everything
+    save_products(
+        products_database
+    )
 
     print("✅ Check complete!")
 
