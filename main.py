@@ -1,65 +1,87 @@
-import os
-import requests
-from bs4 import BeautifulSoup
+from pokemon_center import get_pokemon_center_products
+from database import (
+    load_products,
+    save_products,
+    is_new_product,
+    add_product
+)
+from scorer import score_product
+from alerts import send_telegram_alert
 
 
-# Your Telegram details will be stored securely later
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+def run_bot():
+
+    print("🤖 Pokémon Alert Bot starting...")
+
+    # Load products we've already seen
+    products_database = load_products()
+
+    # Check Pokémon Center UK
+    products = get_pokemon_center_products()
+
+    print(f"Found {len(products)} products")
+
+    # Go through each discovered product
+    for product in products:
+
+        name = product["name"]
+        store = product["store"]
+        price = product["price"]
+        url = product["url"]
+        status = product["status"]
+
+        # Only alert if we've never seen it before
+        if is_new_product(
+            products_database,
+            store,
+            name
+        ):
+
+            # Score the product
+            score, reasons = score_product(
+                product_name=name,
+                store=store,
+                price=price
+            )
+
+            # Format reasons nicely
+            reasons_text = "\n".join(
+                f"• {reason}"
+                for reason in reasons
+            )
+
+            print(
+                f"NEW PRODUCT: "
+                f"{name} | "
+                f"{store} | "
+                f"Score: {score}"
+            )
+
+            # Send Telegram alert
+            send_telegram_alert(
+                product_name=name,
+                store=store,
+                price=price if price else "Unknown",
+                status=status,
+                score=score,
+                reasons=reasons_text,
+                product_url=url
+            )
+
+            # Save it so we don't alert again
+            add_product(
+                products_database,
+                store,
+                name,
+                price,
+                url
+            )
+
+    # Save database
+    save_products(products_database)
+
+    print("✅ Check complete!")
 
 
-def send_telegram_message(message):
-    """Send an alert to your Telegram bot."""
-
-    if not TELEGRAM_TOKEN or not CHAT_ID:
-        print("Telegram details have not been added yet.")
-        return
-
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-
-    data = {
-        "chat_id": CHAT_ID,
-        "text": message,
-        "parse_mode": "HTML"
-    }
-
-    response = requests.post(url, data=data, timeout=10)
-    print(response.text)
-
-
-def check_product(name, url):
-    """Check a product page for stock."""
-
-    try:
-        response = requests.get(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0"
-            },
-            timeout=15
-        )
-
-        response.raise_for_status()
-
-        soup = BeautifulSoup(response.text, "html.parser")
-        page_text = soup.get_text(" ", strip=True).lower()
-
-        out_of_stock_words = [
-            "out of stock",
-            "sold out",
-            "currently unavailable"
-        ]
-
-        in_stock = not any(
-            word in page_text
-            for word in out_of_stock_words
-        )
-
-        return in_stock
-
-    except Exception as error:
-        print(f"Error checking {name}: {error}")
-        return False
-
-
-print("Pokémon Stock Alert Bot is running!")
+if __name__ == "__main__":
+    run_bot()
