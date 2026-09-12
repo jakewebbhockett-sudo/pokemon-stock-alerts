@@ -1,5 +1,6 @@
 from pokemon_center import get_pokemon_center_products
 from smyths import get_smyths_products
+from announcements import get_announcements
 
 from database import (
     load_products,
@@ -16,10 +17,13 @@ def run_bot():
 
     print("🤖 Pokémon Stock Alert Bot starting...")
 
-    # Load products we've already seen
+    # Load previously seen products
     products_database = load_products()
 
-    # Get products from all stores
+    # =========================
+    # CHECK PRODUCTS
+    # =========================
+
     products = []
 
     print("Checking Pokémon Center UK...")
@@ -37,7 +41,7 @@ def run_bot():
         f"{len(products)}"
     )
 
-    # Go through each discovered product
+    # Process products
     for product in products:
 
         name = product["name"]
@@ -46,14 +50,12 @@ def run_bot():
         url = product["url"]
         status = product["status"]
 
-        # Only alert if we've never seen it before
         if is_new_product(
             products_database,
             store,
             name
         ):
 
-            # Score product
             score, reasons = score_product(
                 product_name=name,
                 store=store,
@@ -67,12 +69,9 @@ def run_bot():
 
             print(
                 f"🚨 NEW PRODUCT: "
-                f"{name} | "
-                f"{store} | "
-                f"Score: {score}"
+                f"{name}"
             )
 
-            # Send Telegram alert
             send_telegram_alert(
                 product_name=name,
                 store=store,
@@ -83,7 +82,6 @@ def run_bot():
                 product_url=url
             )
 
-            # Save product
             add_product(
                 products_database,
                 store,
@@ -91,6 +89,47 @@ def run_bot():
                 price,
                 url
             )
+
+    # =========================
+    # CHECK ANNOUNCEMENTS
+    # =========================
+
+    announcements = get_announcements()
+
+    print(
+        f"Total announcements found: "
+        f"{len(announcements)}"
+    )
+
+    for announcement in announcements:
+
+        title = announcement["title"]
+        store = announcement["store"]
+        url = announcement["url"]
+        announcement_type = announcement["type"]
+        confidence = announcement["confidence"]
+
+        print(
+            f"📢 {announcement_type}: "
+            f"{title}"
+        )
+
+        # Use existing Telegram alert system
+        send_telegram_alert(
+            product_name=title,
+            store=store,
+            price="N/A",
+            status=(
+                f"{announcement_type} | "
+                f"{confidence} CONFIDENCE"
+            ),
+            score="NEW",
+            reasons=(
+                "Official Pokémon news or "
+                "announcement detected"
+            ),
+            product_url=url
+        )
 
     # Save database
     save_products(products_database)
