@@ -1,6 +1,5 @@
 from pokemon_center import get_pokemon_center_products
 from smyths import get_smyths_products
-from announcements import get_announcements
 
 from database import (
     load_products,
@@ -28,70 +27,120 @@ def run_bot():
     products = []
 
     print("Checking Pokémon Center UK...")
-    products.extend(
-        get_pokemon_center_products()
-    )
+
+    try:
+        products.extend(
+            get_pokemon_center_products()
+        )
+
+    except Exception as error:
+
+        print(
+            "Pokémon Center check error:",
+            error
+        )
 
     print("Checking Smyths Toys UK...")
-    products.extend(
-        get_smyths_products()
-    )
+
+    try:
+        products.extend(
+            get_smyths_products()
+        )
+
+    except Exception as error:
+
+        print(
+            "Smyths check error:",
+            error
+        )
 
     print(
         f"Total products found: "
         f"{len(products)}"
     )
 
-    # Process products
+    # =========================
+    # CHECK STOCK CHANGES
+    # =========================
+
     for product in products:
 
-        name = product["name"]
-        store = product["store"]
-        price = product["price"]
-        url = product["url"]
-        status = product["status"]
+        name = product.get("name")
+        store = product.get("store")
+        price = product.get("price")
+        url = product.get("url")
+        status = product.get("status")
 
-        # Get previous stock status
+        # Skip incomplete products
+        if not name or not store:
+            continue
+
+        # Get previously saved status
         old_status = get_product_status(
             products_database,
             store,
             name
         )
 
-        # Only alert when stock changes
-        # from NOT AVAILABLE to AVAILABLE
+        print(
+            f"Checking: {name} | "
+            f"Old: {old_status} | "
+            f"New: {status}"
+        )
+
+        # Alert ONLY when:
+        # NOT IN STOCK -> IN STOCK
         if should_alert(
             old_status,
             status
         ):
-
-            score, reasons = score_product(
-                product_name=name,
-                store=store,
-                price=price
-            )
-
-            reasons_text = "\n".join(
-                f"• {reason}"
-                for reason in reasons
-            )
 
             print(
                 f"🚨 RESTOCK ALERT: "
                 f"{name} | {store}"
             )
 
+            try:
+
+                score, reasons = score_product(
+                    product_name=name,
+                    store=store,
+                    price=price
+                )
+
+                reasons_text = "\n".join(
+                    f"• {reason}"
+                    for reason in reasons
+                )
+
+            except Exception as error:
+
+                print(
+                    "Scoring error:",
+                    error
+                )
+
+                score = "N/A"
+                reasons_text = (
+                    "Product is back in stock"
+                )
+
+            # SEND TELEGRAM ALERT
             send_telegram_alert(
                 product_name=name,
                 store=store,
-                price=price if price else "Unknown",
+                price=(
+                    price
+                    if price
+                    else "Unknown"
+                ),
                 status="🟢 IN STOCK NOW",
                 score=score,
                 reasons=reasons_text,
                 product_url=url
             )
 
-        # Always save latest status
+        # Always save the latest product status
         add_product(
             products_database,
             store,
@@ -102,51 +151,14 @@ def run_bot():
         )
 
     # =========================
-    # CHECK ANNOUNCEMENTS
+    # SAVE DATABASE
     # =========================
 
-    announcements = get_announcements()
-
-    print(
-        f"Total announcements found: "
-        f"{len(announcements)}"
-    )
-
-    for announcement in announcements:
-
-        title = announcement["title"]
-        store = announcement["store"]
-        url = announcement["url"]
-        announcement_type = announcement["type"]
-        confidence = announcement["confidence"]
-
-        print(
-            f"📢 {announcement_type}: "
-            f"{title}"
-        )
-
-        send_telegram_alert(
-            product_name=title,
-            store=store,
-            price="N/A",
-            status=(
-                f"📢 {announcement_type} | "
-                f"{confidence} CONFIDENCE"
-            ),
-            score="NEWS",
-            reasons=(
-                f"Source: "
-                f"{announcement['source']}"
-            ),
-            product_url=url
-        )
-
-    # Save everything
     save_products(
         products_database
     )
 
-    print("✅ Check complete!")
+    print("✅ Stock check complete!")
 
 
 if __name__ == "__main__":
